@@ -2,9 +2,9 @@
 
 #include <assert.h>
 #include <ucontext.h>
-
+#include <stdio.h>
 #include "ut_threads.h"
-
+#include <stdlib.h>
 // The following are valid thread statuses:
 
 // This thread is not in use
@@ -31,7 +31,7 @@ int curThread; // the index of the currently executing thread
 
 // Do needed initialization work, including setting up stack pointers for all of the threads
 int ut_init(char *stackbuf) {
-  int i;
+  int i = 0;
     
   // setup stack pointers
   for (i = 0 ; i < MAX_THREADS; ++i ) {
@@ -41,7 +41,9 @@ int ut_init(char *stackbuf) {
   
   // initialize main thread
   thread[0].status = THREAD_ALIVE;
-  curThread = 0; 
+  curThread = 0;
+
+  return getcontext(&thread[curThread].context);
 }
 
 // Creates a thread with entry point set to <entry>
@@ -51,26 +53,55 @@ int ut_create(void (* entry)(int), int arg)
 {
     
     // Find a slot in thread table whose status is THREAD_UNUSED
-    
+    int i = 0;
+    for (i = 0; i < MAX_THREADS; ++i)
+    {
+      if (thread[i].status == THREAD_UNUSED)
+      { 
+        //set the status of the slot to THREAD_ALIVE
+        // and initialize its context
+        
+        // Return the thread Id
+        thread[i].status = THREAD_ALIVE;
+        
+        getcontext(&thread[i].context);
+
+        makecontext(&thread[i].context, entry, 1, arg);
+        return i;
+
+      }
+    }
+    return -1;
     // Return -1 if all slots are in use
     
-    // Otherwise, set the status of the slot to THREAD_ALIVE
-    // and initialize its context
-    
-    // Return the thread Id
 }
 
 // scheduler - picks a thread to run (possibly this one, if no other threads are available)
 void ut_yield()
 {
- 
+ int i = 0;
   // find a thread that can run, using round robin scheduling; pick this one if no other thread can run
+  for (i = (curThread + 1)  % MAX_THREADS; i != curThread; )
+  {
+    if (thread[i].status == THREAD_ALIVE)
+    {
+      // if another thread can run, switch to it
+      int buf = curThread;
+      curThread = i;
+      swapcontext(&thread[buf].context, &thread[i].context);
+    }
+    ++i;
+    i = i % MAX_THREADS;
+  }
+    // if no threads are ALIVE, exit the program
+  if (thread[curThread].status == THREAD_ALIVE)
+  {
+    return;
+  }
   
-  // if another thread can run, switch to it
+  exit(0);
   
-  // if no threads are ALIVE, exit the program
-    
-  // otherwise, return to continue running this thread
+    // otherwise, return to continue running this thread
   
 }
 
@@ -85,20 +116,37 @@ int ut_getid()
 int ut_join(int threadId, int *status) 
 {
     // return -1 if threadId is illegal (out of range) or if its status is THREAD_UNUSED
-    
+    if (threadId >= MAX_THREADS || threadId < 0 || thread[threadId].status == THREAD_UNUSED)
+    {
+      return -1;
+    }
+
     // busy-wait (calling ut_yield in a loop) while the status of thread <threadId> is THREAD_ALIVE
-    
+    while(thread[threadId].status == THREAD_ALIVE){
+      ut_yield();
+    }
+
     // If the thread status is THREAD_ZOMBIE, 
-    //    Change its status to THREAD_UNUSED
-    //    Set *status to its exit code, and return 0
+    if(thread[threadId].status == THREAD_ZOMBIE){
+
+      //    Change its status to THREAD_UNUSED
+      thread[threadId].status = THREAD_UNUSED;
+
+      //    Set *status to its exit code, and return 0
+      *status = thread[threadId].exitValue;
+      return 0;
+    }
     // Otherwise, the thread was joined by someone else already; return -1    
-    
+    return -1;
 }
 
 // Terminate execution of current thread
 void ut_finish(int result)
 {
     // record <result> in current thread's exitValue field
+    thread[curThread].exitValue = result;
     // set current thread's status to THREAD_ZOMBIE
+    thread[curThread].status = THREAD_ZOMBIE;
     // pick another thread to run
+    ut_yield();
 }
