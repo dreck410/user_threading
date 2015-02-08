@@ -80,7 +80,7 @@ int ut_create(void (* entry)(int), int arg)
 void ut_yield()
 {
  int i = 0;
-  // find a thread that can run, using round robin scheduling; pick this one if no other thread can run
+  // find a thread that can run, using round robin scheduling;
   for (i = (curThread + 1)  % MAX_THREADS; i != curThread; )
   {
     if (thread[i].status == THREAD_ALIVE)
@@ -93,16 +93,14 @@ void ut_yield()
     ++i;
     i = i % MAX_THREADS;
   }
-    // if no threads are ALIVE, exit the program
+  //pick this one if no other thread can run
   if (thread[curThread].status == THREAD_ALIVE)
   {
     return;
   }
   
-  exit(0);
-  
-    // otherwise, return to continue running this thread
-  
+  // if no threads are ALIVE, exit the program
+  exit(0);  
 }
 
 // returns thread ID of current thread
